@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lostandfound/api_config.dart';
+import 'package:lostandfound/formfound.dart';
+import 'package:lostandfound/formlost.dart';
+import 'package:lostandfound/listlost.dart';
+import 'package:lostandfound/login.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(const MyApp());
@@ -7,115 +14,312 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'Lost and Found',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const LoginPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class GreetingCardHeader extends StatelessWidget {
+  final String userName;
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  const GreetingCardHeader({super.key, required this.userName});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      margin: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: const Color(0xffEAF5F2),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0xffD1E7E2), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 20,
+            backgroundColor: Color(0xff0D7A70),
+            child: Icon(Icons.person, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Halo, $userName',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const SizedBox(height: 2.0),
+                const Text(
+                  'User dapat membuat laporan barang lengkap dengan deskripsi.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class LaporanScreen extends StatefulWidget {
+  final int userId;
+  final String userName;
+  final String role;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  const LaporanScreen({
+    super.key,
+    required this.userId,
+    required this.userName,
+    required this.role,
+  });
+
+  @override
+  State<LaporanScreen> createState() => _LaporanScreenState();
+}
+
+class _LaporanScreenState extends State<LaporanScreen> {
+  List<Map<String, dynamic>> listLaporan = [];
+  bool isLoading = true;
+
+  int _currentIndex = 0;
+  bool get isAdmin => widget.role == 'admin';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchDataLaporan();
+  }
+
+  Future<void> fetchDataLaporan() async {
+    final url = Uri.parse('$apiBaseUrl/view.php?role=${widget.role}');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        final List<dynamic> reports = decoded is List
+            ? decoded
+            : decoded is Map<String, dynamic> && decoded['reports'] is List
+            ? decoded['reports']
+            : [];
+
+        setState(() {
+          listLaporan = reports
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Gagal memuat data');
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _openReportForm() async {
+    final String reportType = isAdmin && _currentIndex == 1 ? 'found' : 'lost';
+    final bool? isSaved = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => reportType == 'lost'
+            ? FormLostPage(userId: widget.userId)
+            : FormFoundPage(userId: widget.userId),
+      ),
+    );
+
+    if (isSaved == true) {
+      fetchDataLaporan();
+    }
+  }
+
+  void _logout() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  Widget _buildLostPage() {
+    final lostData = listLaporan
+        .where((item) => item['type'] == 'lost')
+        .toList();
+    return Column(
+      children: [
+        GreetingCardHeader(userName: widget.userName),
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : lostData.isEmpty
+              ? const Center(child: Text('Tidak ada laporan barang.'))
+              : ListView.builder(
+                  itemCount: lostData.length,
+                  itemBuilder: (context, index) {
+                    final item = lostData[index];
+                    return ItemLaporanCard(data: item);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFoundPage() {
+    final foundData = listLaporan
+        .where((item) => item['type'] == 'found')
+        .toList();
+    return Column(
+      children: [
+        GreetingCardHeader(userName: widget.userName),
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : foundData.isEmpty
+              ? const Center(child: Text('Tidak ada laporan barang.'))
+              : ListView.builder(
+                  itemCount: foundData.length,
+                  itemBuilder: (context, index) {
+                    final item = foundData[index];
+                    return ItemLaporanCard(data: item);
+                  },
+                ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        title: Text(
+          _currentIndex == 0
+              ? 'Laporan Barang Hilang'
+              : 'Laporan Barang Ditemukan',
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: fetchDataLaporan,
+          ),
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
+        ],
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0.5,
       ),
+
+      body: _currentIndex == 0 ? _buildLostPage() : _buildFoundPage(),
+
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        tooltip: 'Lapor',
+        onPressed: !isAdmin && _currentIndex == 1 ? null : _openReportForm,
+        backgroundColor: !isAdmin && _currentIndex == 1
+            ? Colors.grey
+            : const Color(0xff0D7A70),
+        shape: const CircleBorder(),
+        child: const Icon(Icons.edit_note, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8.0,
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: MaterialButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentIndex = 0;
+                    });
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        color: _currentIndex == 0
+                            ? const Color(0xff0D7A70)
+                            : Colors.grey,
+                      ),
+                      Text(
+                        'Lost',
+                        style: TextStyle(
+                          color: _currentIndex == 0
+                              ? const Color(0xff0D7A70)
+                              : Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 40),
+
+              Expanded(
+                child: MaterialButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentIndex = 1;
+                    });
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: _currentIndex == 1
+                            ? const Color(0xff0D7A70)
+                            : Colors.grey,
+                      ),
+                      Text(
+                        'Found',
+                        style: TextStyle(
+                          color: _currentIndex == 1
+                              ? const Color(0xff0D7A70)
+                              : Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
