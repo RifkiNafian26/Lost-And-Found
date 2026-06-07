@@ -2,8 +2,17 @@ import 'package:flutter/material.dart';
 
 class ItemLaporanCard extends StatelessWidget {
   final Map<String, dynamic> data;
+  final bool canManage;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const ItemLaporanCard({super.key, required this.data});
+  const ItemLaporanCard({
+    super.key,
+    required this.data,
+    this.canManage = false,
+    this.onEdit,
+    this.onDelete,
+  });
 
   IconData getIcon(String kategori) {
     switch (kategori.toLowerCase()) {
@@ -129,22 +138,57 @@ class ItemLaporanCard extends StatelessWidget {
             ),
           ),
 
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: data['type'] == 'lost'
-                  ? Colors.red.withValues(alpha: 0.1)
-                  : Colors.green.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              data['type'] == 'lost' ? 'LOST' : 'FOUND',
-              style: TextStyle(
-                color: data['type'] == 'lost' ? Colors.red : Colors.green,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: data['type'] == 'lost'
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  data['type'] == 'lost' ? 'LOST' : 'FOUND',
+                  style: TextStyle(
+                    color: data['type'] == 'lost' ? Colors.red : Colors.green,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              if (canManage) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Edit laporan',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      color: const Color(0xff0D7A70),
+                      onPressed: onEdit,
+                    ),
+                    IconButton(
+                      tooltip: 'Hapus laporan',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      color: Colors.red,
+                      onPressed: onDelete,
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ],
       ),

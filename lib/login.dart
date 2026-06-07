@@ -163,7 +163,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(
                       height: 22,
-                    ), // Menggabungkan space yang menggantung tadi
+                    ),
                     FilledButton.icon(
                       onPressed: _isLoading ? null : _submit,
                       icon: _isLoading

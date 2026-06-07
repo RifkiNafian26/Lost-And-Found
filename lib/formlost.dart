@@ -23,12 +23,16 @@ class ReportFormPage extends StatefulWidget {
   final String type;
   final String title;
   final int userId;
+  final String role;
+  final Map<String, dynamic>? report;
 
   const ReportFormPage({
     super.key,
     required this.type,
     required this.title,
     required this.userId,
+    this.role = 'user',
+    this.report,
   });
 
   @override
@@ -76,10 +80,37 @@ class _ReportFormPageState extends State<ReportFormPage> {
     return _categories.firstWhere((item) => item['code'] == _selectedCode);
   }
 
+  bool get _isEdit => widget.report != null;
+
   List<Map<String, String>> get _selectedFields {
     return (_selectedCategory['fields'] as List)
         .map((field) => Map<String, String>.from(field))
         .toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    final report = widget.report;
+    if (report == null) return;
+
+    final categoryCode = report['category_code']?.toString();
+    final bool hasCategory = _categories.any(
+      (category) => category['code'] == categoryCode,
+    );
+
+    if (hasCategory) {
+      _selectedCode = categoryCode!;
+    }
+
+    final details = report['details'] is List ? report['details'] as List : [];
+    for (final detail in details.whereType<Map>()) {
+      final key = detail['field_key']?.toString();
+      if (key == null || key.isEmpty) continue;
+
+      _controllerFor(key).text = detail['field_value']?.toString() ?? '';
+    }
   }
 
   @override
@@ -118,9 +149,11 @@ class _ReportFormPageState extends State<ReportFormPage> {
       );
 
       final response = await http.post(
-        Uri.parse('$apiBaseUrl/insert.php'),
+        Uri.parse('$apiBaseUrl/${_isEdit ? 'update.php' : 'insert.php'}'),
         body: {
+          if (_isEdit) 'report_id': widget.report!['id'].toString(),
           'user_id': widget.userId.toString(),
+          'role': widget.role,
           'type': widget.type,
           'category_code': _selectedCode,
           'details': jsonEncode(details),
@@ -153,6 +186,12 @@ class _ReportFormPageState extends State<ReportFormPage> {
             ),
           );
         }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan laporan: ${response.statusCode}'),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -236,7 +275,7 @@ class _ReportFormPageState extends State<ReportFormPage> {
           actions: [
             FilledButton(
               onPressed: () {
-                Navigator.pop(context); // Tutup dialog
+                Navigator.pop(context);
                 Navigator.pop(this.context, true);
               },
               style: FilledButton.styleFrom(
@@ -331,7 +370,9 @@ class _ReportFormPageState extends State<ReportFormPage> {
             onPressed: _submitReport,
             icon: const Icon(Icons.send_outlined),
             label: Text(
-              widget.type == 'lost'
+              _isEdit
+                  ? 'Simpan Perubahan'
+                  : widget.type == 'lost'
                   ? 'Kirim Laporan Hilang'
                   : 'Kirim Laporan Ditemukan',
             ),

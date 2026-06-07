@@ -153,6 +153,94 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
   }
 
+  bool _canManageReport(Map<String, dynamic> item) {
+    if (isAdmin) return true;
+
+    final int? ownerId = int.tryParse(item['user_id'].toString());
+    return item['type'] == 'lost' && ownerId == widget.userId;
+  }
+
+  Future<void> _openEditForm(Map<String, dynamic> item) async {
+    final bool? isSaved = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReportFormPage(
+          type: item['type']?.toString() ?? 'lost',
+          title: item['type'] == 'found'
+              ? 'Edit Barang Ditemukan'
+              : 'Edit Barang Hilang',
+          userId: widget.userId,
+          role: widget.role,
+          report: item,
+        ),
+      ),
+    );
+
+    if (isSaved == true) {
+      fetchDataLaporan();
+    }
+  }
+
+  Future<void> _deleteReport(Map<String, dynamic> item) async {
+    final bool? isConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus laporan?'),
+        content: const Text('Laporan yang dihapus tidak bisa dikembalikan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Hapus'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          ),
+        ],
+      ),
+    );
+
+    if (isConfirmed != true) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/delete.php'),
+        body: {
+          'report_id': item['id'].toString(),
+          'user_id': widget.userId.toString(),
+          'role': widget.role,
+        },
+      );
+
+      final decoded = json.decode(response.body);
+      final bool isSuccess =
+          response.statusCode == 200 && decoded['success'] == true;
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isSuccess
+                ? 'Laporan berhasil dihapus'
+                : decoded['message']?.toString() ?? 'Gagal menghapus laporan',
+          ),
+        ),
+      );
+
+      if (isSuccess) {
+        fetchDataLaporan();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Terjadi kesalahan: $e')));
+    }
+  }
+
   void _logout() {
     Navigator.pushAndRemoveUntil(
       context,
@@ -177,7 +265,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   itemCount: lostData.length,
                   itemBuilder: (context, index) {
                     final item = lostData[index];
-                    return ItemLaporanCard(data: item);
+                    final bool canManage = _canManageReport(item);
+                    return ItemLaporanCard(
+                      data: item,
+                      canManage: canManage,
+                      onEdit: canManage ? () => _openEditForm(item) : null,
+                      onDelete: canManage ? () => _deleteReport(item) : null,
+                    );
                   },
                 ),
         ),
@@ -201,7 +295,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   itemCount: foundData.length,
                   itemBuilder: (context, index) {
                     final item = foundData[index];
-                    return ItemLaporanCard(data: item);
+                    final bool canManage = _canManageReport(item);
+                    return ItemLaporanCard(
+                      data: item,
+                      canManage: canManage,
+                      onEdit: canManage ? () => _openEditForm(item) : null,
+                      onDelete: canManage ? () => _deleteReport(item) : null,
+                    );
                   },
                 ),
         ),
